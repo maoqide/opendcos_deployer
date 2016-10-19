@@ -1,0 +1,6 @@
+exclude everything except directory src/deployer
+deployer
+/bin/*
+/pkg/*
+/src/*
+!/src/deployer

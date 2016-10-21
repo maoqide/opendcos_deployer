@@ -15,11 +15,24 @@ var (
 	DEPLOY_ERROR_INVALIDATE_CLUSTERNAME string = "INVALIDATE_CLUSTERNAME"
 )
 
-func cleanup(clusterDir string) {
-	logrus.Infof("start cleanup...")
-	//_, _, err = common.ExecCommand("sudo rm -rf " + clusterDir)
+//remove the cluster directory
+func cleanup(clusterDir string) (err error) {
+
+	logrus.Infof("start cleanup... clusterDir: %s", clusterDir)
+
+	_, errput, err := common.ExecCommand("sudo rm -rf " + clusterDir)
+	if err != nil {
+		logrus.Errorf("cleanup error, err is %s, errput: %s", err, errput)
+	}
+
+	logrus.Infof("cleanup clusterDir: %s, finished", clusterDir)
+	return
 }
 
+//TODO
+func cleanNode() (err error) {
+	return
+}
 func CreateCluster(request entity.CreateRequest) (err error) {
 
 	logrus.Infof("start createCluster...")
@@ -37,7 +50,7 @@ func CreateCluster(request entity.CreateRequest) (err error) {
 	}
 
 	//generate clusterDir
-	clusterDir := BASE_PATH + username + "/" + clusterName + "/"
+	clusterDir := genClusterDir(username, clusterName)
 
 	//preparation
 	err = preparation(clusterName, clusterDir, request.Timeout, request.SshUser, nodesInfo.SalveNodes, nodesInfo.MasterNodes, nodesInfo.PrivateKey, nodesInfo.PrivateNicName)
@@ -68,12 +81,170 @@ func CreateCluster(request entity.CreateRequest) (err error) {
 	}
 
 	//backup
-	err = backup()
+	err = backup(clusterDir)
 	if err != nil {
 		logrus.Errorf("createCluster, backup failed. err is %v", err)
 		return
 	}
 
+	return
+}
+
+func DeleteCluster(username string, clusterName string) (err error) {
+
+	logrus.Infof("start DeleteCluster... username: %s, clusterName: %s", username, clusterName)
+
+	//generate clusterDir
+	clusterDir := genClusterDir(username, clusterName)
+
+	//check if cluster exists
+	exist, _ := common.PathExist(clusterDir)
+	if !exist {
+		logrus.Errorf("DeleteCluster, cluster not existed. clusterDir: %s", clusterDir)
+		return
+	}
+
+	//execute --uninstall
+	commandStr := "sudo bash script/exec.sh " + clusterDir + " uninstall"
+	logrus.Infof("DeleteCluster,execute command: %s", commandStr)
+	output, errput, err := common.ExecCommand(commandStr)
+	if err != nil {
+		logrus.Errorf("DeleteCluster, ExecCommand err: %v", err)
+		logrus.Infof("DeleteCluster %s, errput: %s", clusterName, errput)
+		return
+	}
+	logrus.Infof("DeleteCluster %s, output: %s", clusterName, output)
+
+	cleanup(clusterDir)
+
+	return
+
+}
+
+func AddNodes(request entity.AddNodeRequest) (err error) {
+
+	logrus.Infof("start AddNodes...")
+	logrus.Infof("AddNodeRequest: %v", request)
+
+	clusterName := request.ClusterName
+	username := request.UserName
+	nodes := request.Nodes
+
+	//generate clusterDir
+	clusterDir := genClusterDir(username, clusterName)
+	privateKeyPath := clusterDir + "genconf/ssh_key"
+
+	//check if cluster exists
+	exist, _ := common.PathExist(clusterDir)
+	if !exist {
+		logrus.Errorf("AddNodes, cluster not existed. clusterDir: %s", clusterDir)
+		return
+	}
+
+	//check if dcos-installer.tar exists
+	exist, _ = common.PathExist(clusterDir + "genconf/serve/dcos-install.tar")
+	if !exist {
+		//TODO
+		q := backup(clusterDir)
+		logrus.Infof("%v", q)
+	}
+
+	//scp -i $ssh_key $clusterDir/genconf/serve/dcos-install.tar $(sshuser)@$(nodeip):/tmp/dcos-install.tar
+	commandStr := "scp -i " + privateKeyPath + " " +
+		clusterDir + "genconf/serve/dcos-install.tar " + request.SshUser + "@" + nodes[0] + ":/tmp/dcos-install.tar"
+
+	logrus.Infof("execute command: %s", commandStr)
+	_, errput, err := common.ExecCommand(commandStr)
+	if err != nil {
+		logrus.Errorf("AddNodes, ExecCommand err: %v", err)
+		logrus.Infof("AddNodes failed, errput: %s", errput)
+		return
+	}
+
+	//command: ssh -i $ssh_key $(sshuser)@$(nodeip) sudo mkdir -p /opt/dcos_install_tmp
+	//	commandStr = "ssh -i " + clusterDir + "genconf/ssh_key " + request.SshUser + "@" + nodes[0] +
+	//		" sudo mkdir -p /opt/dcos_install_tmp"
+
+	//	logrus.Infof("execute command: %s", commandStr)
+	//_, errput, err = common.ExecCommand(commandStr)
+
+	commandStr = "sudo mkdir -p /opt/dcos_install_tmp"
+	_, errput, err = common.SshExecCmdWithKey(nodes[0], "22", request.SshUser, privateKeyPath, commandStr)
+	if err != nil {
+		logrus.Errorf("AddNodes, ExecCommand err: %v", err)
+		logrus.Infof("AddNodes failed, errput: %s", errput)
+		return
+	}
+
+	//command: ssh -i $ssh_key $(sshuser)@$(nodeip) sudo tar xf dcos-install.tar -C /opt/dcos_install_tmp
+	//	commandStr = "ssh -i " + clusterDir + "genconf/ssh_key " + request.SshUser + "@" + nodes[0] +
+	//		" sudo tar xf /tmp/dcos-install.tar -C /opt/dcos_install_tmp"
+
+	//	logrus.Infof("execute command: %s", commandStr)
+	//	_, errput, err = common.ExecCommand(commandStr)
+
+	commandStr = "sudo tar xf /tmp/dcos-install.tar -C /opt/dcos_install_tmp"
+	_, errput, err = common.SshExecCmdWithKey(nodes[0], "22", request.SshUser, privateKeyPath, commandStr)
+	if err != nil {
+		logrus.Errorf("AddNodes, ExecCommand err: %v", err)
+		logrus.Infof("AddNodes failed, errput: %s", errput)
+		return
+	}
+
+	//command: ssh -i $ssh_key $(sshuser)@$(nodeip) sudo bash /opt/dcos_install_tmp/dcos_install.sh slave/slave_public
+	//	commandStr = "ssh -i " + clusterDir + "genconf/ssh_key " + request.SshUser + "@" + nodes[0] +
+	//		" sudo bash /opt/dcos_install_tmp/dcos_install.sh " + request.SlaveType + " >> " + clusterDir + "opendcos_addnode.log"
+
+	//	logrus.Infof("execute command: %s", commandStr)
+	//_, errput, err = common.ExecCommand(commandStr)
+
+	commandStr = "sudo bash /opt/dcos_install_tmp/dcos_install.sh " + request.SlaveType + " >> " + clusterDir + "opendcos_addnode.log"
+	_, errput, err = common.SshExecCmdWithKey(nodes[0], "22", request.SshUser, privateKeyPath, commandStr)
+	if err != nil {
+		logrus.Errorf("AddNodes, ExecCommand err: %v", err)
+		logrus.Infof("AddNodes failed, errput: %s", errput)
+		return
+	}
+
+	return
+}
+
+func DeleteNode(username string, clusterName string, ip string) (err error) {
+
+	logrus.Infof("start DeleteNode...")
+
+	//TODO
+	//check
+
+	//generate clusterDir
+	clusterDir := genClusterDir(username, clusterName)
+
+	//command: ssh -i $ssh_key $(sshuser)@$(nodeip) sudo -i /opt/mesosphere/bin/pkgpanda uninstall
+	commandStr := "ssh -i " + clusterDir + "genconf/ssh_key " + "root" + "@" + ip +
+		" sudo -i /opt/mesosphere/bin/pkgpanda uninstall"
+
+	logrus.Infof("execute command: %s", commandStr)
+	output, errput, err := common.ExecCommand(commandStr)
+
+	if err != nil {
+		logrus.Errorf("DeleteNode, ExecCommand err: %v", err)
+		logrus.Infof("DeleteNode failed, errput: %s", errput)
+		return
+	}
+	logrus.Infof("command output: %s", output)
+
+	//command: ssh -oConnectTimeout=10 -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oBatchMode=yes -oPasswordAuthentication=no -p22 -i $ssh_key $(sshuser)@$(nodeip) sudo rm -rf /opt/mesosphere /etc/mesosphere
+	commandStr = "ssh -i " + clusterDir + "genconf/ssh_key " + "root" + "@" + ip +
+		" sudo rm -rf /opt/mesosphere /etc/mesosphere"
+
+	logrus.Infof("execute command: %s", commandStr)
+	output, errput, err = common.ExecCommand(commandStr)
+	if err != nil {
+		logrus.Errorf("DeleteNode, ExecCommand err: %v", err)
+		logrus.Infof("DeleteNode failed, errput: %s", errput)
+		return
+	}
+	logrus.Infof("command output: %s", output)
 	return
 }
 
@@ -99,7 +270,9 @@ func preparation(clusterName string, clusterDir string, timeout string, sshUser 
 	genSshKey(clusterDir+"genconf/", privateKey)
 
 	//execute --genconf
-	output, errput, err := common.ExecCommand("sudo bash script/exec.sh " + clusterDir + " genconf")
+	commandStr := "sudo bash script/exec.sh " + clusterDir + " genconf"
+	logrus.Infof("preparation, execute command: %s", commandStr)
+	output, errput, err := common.ExecCommand(commandStr)
 	if err != nil {
 		logrus.Errorf("Preparation, ExecCommand err: %v", err)
 		logrus.Infof("Preparation for cluster %s, errput: %s", clusterName, errput)
@@ -107,6 +280,8 @@ func preparation(clusterName string, clusterDir string, timeout string, sshUser 
 		return
 	}
 	logrus.Infof("Preparation for cluster %s, output: %s", clusterName, output)
+	logrus.Infof("Preparation finished clusterName: %s, clusterDir: %s", clusterName, clusterDir)
+
 	return
 }
 
@@ -129,7 +304,9 @@ func preCheck(clusterName string, clusterDir string, skipInstall bool) (err erro
 	}
 
 	//execute --preflight
-	output, errput, err := common.ExecCommand("sudo bash script/exec.sh " + clusterDir + " preflight")
+	commandStr := "sudo bash script/exec.sh " + clusterDir + " preflight"
+	logrus.Infof("preCheck, execute command: %s", commandStr)
+	output, errput, err := common.ExecCommand(commandStr)
 	if err != nil {
 		logrus.Errorf("preCheck --preflight, ExecCommand err: %v", err)
 		logrus.Infof("preCheck --preflight for cluster %s, errput: %s", clusterName, errput)
@@ -137,6 +314,7 @@ func preCheck(clusterName string, clusterDir string, skipInstall bool) (err erro
 		return
 	}
 	logrus.Infof("preCheck --preflight for cluster %s, output: %s", clusterName, output)
+	logrus.Infof("preCheck finished. clusterName: %s, clusterDir: %s", clusterName, clusterDir)
 
 	return
 }
@@ -147,7 +325,9 @@ func provision(clusterName string, clusterDir string) (err error) {
 	logrus.Infof("start provision... clusterName: %s, clusterDir: %s", clusterName, clusterDir)
 
 	//execute --deploy
-	output, errput, err := common.ExecCommand("sudo bash script/exec.sh " + clusterDir + " deploy")
+	commandStr := "sudo bash script/exec.sh " + clusterDir + " deploy"
+	logrus.Infof("provision, execute command: %s", commandStr)
+	output, errput, err := common.ExecCommand(commandStr)
 	if err != nil {
 		logrus.Errorf("provision --deploy, ExecCommand err: %v", err)
 		logrus.Infof("provision --deploy for cluster %s, errput: %s", clusterName, errput)
@@ -155,6 +335,7 @@ func provision(clusterName string, clusterDir string) (err error) {
 		return
 	}
 	logrus.Infof("provision --deploy for cluster %s, output: %s", clusterName, output)
+	logrus.Infof(" provision finished. clusterName: %s, clusterDir: %s", clusterName, clusterDir)
 	return
 }
 
@@ -164,7 +345,9 @@ func postAction(clusterName string, clusterDir string) (err error) {
 	logrus.Infof("start postAction... clusterName: %s, clusterDir: %s", clusterName, clusterDir)
 
 	//execute --postflight
-	output, errput, err := common.ExecCommand("sudo bash script/exec.sh " + clusterDir + " postflight")
+	commandStr := "sudo bash script/exec.sh " + clusterDir + " postflight"
+	logrus.Infof("postAction, execute command: %s", commandStr)
+	output, errput, err := common.ExecCommand(commandStr)
 	if err != nil {
 		logrus.Errorf("postAction --postflight, ExecCommand err: %v", err)
 		logrus.Infof("postAction --postflight for cluster %s, errput: %s", clusterName, errput)
@@ -172,11 +355,29 @@ func postAction(clusterName string, clusterDir string) (err error) {
 		return
 	}
 	logrus.Infof("postAction --postflight for cluster %s, output: %s", clusterName, output)
+	logrus.Infof("postAction finished. clusterName: %s, clusterDir: %s", clusterName, clusterDir)
 	return
 }
 
+//TODO
 //backup dcos-install.tar
-func backup() (err error) {
+func backup(clusterDir string) (err error) {
+
+	logrus.Infof("start backup...  clusterDir: %s", clusterDir)
+
+	//command: sudo tar cf $clusterDir/genconf/serve/dcos-install.tar -C $clusterDir/genconf/serve .
+	commandStr := "tar cf " + clusterDir + "genconf/serve/dcos-install.tar -C " + clusterDir + "genconf/serve ."
+	logrus.Infof("backup, execute command: %s", commandStr)
+	_, errput, err := common.ExecCommand(commandStr)
+	if err != nil {
+		logrus.Errorf("backup tar cf failed, ExecCommand err: %v", err)
+		logrus.Infof("backup tar cf, errput: %s", errput)
+		//cleanup()
+		return
+	}
+
+	logrus.Infof("backup finished. clusterDir: %s", clusterDir)
+
 	return
 }
 
@@ -204,8 +405,8 @@ func genConf(path string, clusterName string, timeout string, sshUser string, sl
 	for _, mip := range masters {
 		strMasters = strMasters + `- ` + mip + "\n"
 	}
-	logrus.Infof("genConf, slaveStr: %s", strSlaves)
-	logrus.Infof("genConf, masterStr: %s", strMasters)
+	logrus.Infof("genConf, slaveStr:\n%s", strSlaves)
+	logrus.Infof("genConf, masterStr:\n%s", strMasters)
 
 	fileStr := `---
 agent_list:
@@ -223,7 +424,7 @@ ssh_port: 22
 ssh_user: ` + sshUser + `
 `
 
-	logrus.Debugf("genConf, config.yaml: ", fileStr)
+	logrus.Debugf("genConf, config.yaml:\n", fileStr)
 	err = ioutil.WriteFile(path+"config.yaml", []byte(fileStr), 0644)
 	if err != nil {
 		logrus.Errorf("genConf failed, err is %v", err)
@@ -244,7 +445,7 @@ export PATH=/usr/sbin:/usr/bin:$PATH
 echo $(ip addr show ` + privateNicName + ` | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | head -1)
 `
 
-	logrus.Debugf("genIPDetect, ip-detect: ", fileStr)
+	logrus.Debugf("genIPDetect, ip-detect:\n%s", fileStr)
 	err = ioutil.WriteFile(path+"ip-detect", []byte(fileStr), 0644)
 	if err != nil {
 		logrus.Errorf("genIPDetect failed, err is %v", err)
@@ -257,7 +458,7 @@ echo $(ip addr show ` + privateNicName + ` | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[
 //path should be absolute and end with "/"
 func genSshKey(path string, privateKey string) (err error) {
 
-	logrus.Infof("start create file ssh_key... path: %s, privateKey: %s", path, privateKey)
+	logrus.Infof("start create file ssh_key... path: %s, privateKey:\n%s", path, privateKey)
 
 	decodeKey, err := common.Base64Decode([]byte(privateKey))
 	if err != nil {
@@ -265,10 +466,52 @@ func genSshKey(path string, privateKey string) (err error) {
 		return
 	}
 
-	err = ioutil.WriteFile(path+"ssh_key", []byte(privateKey), 0600)
+	logrus.Infof("the decoded privateKey:\n%s", decodeKey)
+
+	err = ioutil.WriteFile(path+"ssh_key", []byte(decodeKey), 0600)
 	if err != nil {
 		logrus.Errorf("genSshKey failed, err is %v", err)
 	}
 	logrus.Infof("file ssh_key created.")
 	return
+}
+
+//generate cluster directory with username & clusterName
+func genClusterDir(username string, clusterName string) (clusterDir string) {
+
+	clusterDir = BASE_PATH + username + "/" + clusterName + "/"
+	return
+}
+
+func DownloadInstaller() (err error) {
+
+	logrus.Infof("DownloadInstaller, downloading dcos_generate_config.sh. this may take some time...")
+
+	//check if file exists
+	exist, _ := common.PathExist("/opendcos/dcos_generate_config.sh")
+	if exist {
+		logrus.Infof("DownloadInstaller, dcos_generate_config.sh existed.")
+		return
+	}
+
+	commandStr := "mkdir -p /opendcos/"
+	logrus.Infof("execute command: %s", commandStr)
+	_, errput, err := common.ExecCommand(commandStr)
+	if err != nil {
+		logrus.Errorf("DownloadInstaller, ExecCommand err: %v", err)
+		logrus.Infof("DownloadInstaller failed, errput: %s", errput)
+		return
+	}
+
+	commandStr = "curl -o /opendcos/dcos_generate_config.sh https://downloads.dcos.io/dcos/stable/dcos_generate_config.sh"
+	logrus.Infof("execute command: %s", commandStr)
+	output, errput, err := common.ExecCommand(commandStr)
+	logrus.Infof(output)
+	if err != nil {
+		logrus.Errorf("DownloadInstaller, ExecCommand err: %v", err)
+		logrus.Infof("DownloadInstaller failed, errput: %s", errput)
+		return
+	}
+	return
+
 }

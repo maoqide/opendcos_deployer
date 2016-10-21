@@ -61,6 +61,17 @@ func ExecCommand(input string) (output string, errput string, err error) {
 	return retoutput, reterrput, err
 }
 
+func SshExecCmdWithKey(ip string, port string, sshUser string, privateKeyPath string, command string) (output string, errput string, err error) {
+
+	logrus.Debugf("start SshExecCmdWithKey... ip: %s, port: %s, sshUser: %s, privateKeyPath: %s, command: %s", ip, port, sshUser, privateKeyPath, command)
+	//command: ssh -oConnectTimeout=10 -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oBatchMode=yes -oPasswordAuthentication=no -p22 -i $privateKeyPath $(sshuser)@$(ip) $command
+	input := "ssh -oConnectTimeout=10 -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oBatchMode=yes -oPasswordAuthentication=no -p" + port +
+		" -i " + privateKeyPath + " " + sshUser + "@" + ip + " " + command
+	logrus.Infof("SshExecCmdWithKey, command: %s", input)
+
+	return ExecCommand(input)
+}
+
 func TestCmd(input string) {
 
 	logrus.Infof("command: %s", input)

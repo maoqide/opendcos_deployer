@@ -17,11 +17,13 @@ type NodesInfo struct {
 }
 
 type AddNodeRequest struct {
-	UserName       string `json:"userName"`
-	ClusterName    string `json:"clusterName"`
-	SlaveType      string `json:"slaveType"`
-	PrivateNicName string `json:"privateNicName"`
-	Nodes          []Node `json:"node"`
+	UserName       string   `json:"userName"`
+	ClusterName    string   `json:"clusterName"`
+	SlaveType      string   `json:"slaveType"` //'slave' or 'slave_public'
+	PrivateNicName string   `json:"privateNicName"`
+	SshUser        string   `json:"sshUser"`
+	Nodes          []string `json:"nodes"`
+	//Nodes          []Node `json:"nodes"`
 }
 
 type Node struct {

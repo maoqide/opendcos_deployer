@@ -22,7 +22,10 @@ type RespData struct {
 
 var (
 	DEPLOY_ERROR_PARSE_REQUESTBODY_FAILED string = "PARSE_REQUESTBODY_FAILED"
-	DEPLOY_ERROR_CREATECLUSTER_FAILED     string = "CREATECLUSTER_FAILED"
+	DEPLOY_ERROR_CREATE_CLUSTER_FAILED    string = "CREATE_CLUSTER_FAILED"
+	DEPLOY_ERROR_DELETE_CLUSTER_FAILED    string = "DELETE_CLUSTER_FAILED"
+	DEPLOY_ERROR_ADD_NODE_FAILED          string = "ADD_NODE_FAILED"
+	DEPLOY_ERROR_DELETE_NODE_FAILED       string = "DELETE_NODE_FAILED"
 )
 
 func (r Resource) Register(container *restful.Container) {
@@ -64,10 +67,11 @@ func (r Resource) Register(container *restful.Container) {
 
 func (r Resource) CreateClusterHandler(request *restful.Request, response *restful.Response) {
 
-	logrus.Infof("create a cluster...")
+	logrus.Infof("call CreateClusterHandler...")
 
 	createRequest := entity.CreateRequest{}
 
+	//parse RequestBody
 	err := json.NewDecoder(request.Request.Body).Decode(&createRequest)
 	if err != nil {
 		logrus.Errorf("CreateClusterHandler, convert body to request failed, error is %v", err)
@@ -79,7 +83,7 @@ func (r Resource) CreateClusterHandler(request *restful.Request, response *restf
 	err = CreateCluster(createRequest)
 	if err != nil {
 		logrus.Errorf("CreateClusterHandler, CreateCluster failed, error is %v", err)
-		resp := RespStruct{Success: false, Err: DEPLOY_ERROR_CREATECLUSTER_FAILED}
+		resp := RespStruct{Success: false, Err: DEPLOY_ERROR_CREATE_CLUSTER_FAILED}
 		response.WriteEntity(resp)
 		return
 	}
@@ -92,32 +96,67 @@ func (r Resource) CreateClusterHandler(request *restful.Request, response *restf
 
 func (r Resource) AddNodesHandler(request *restful.Request, response *restful.Response) {
 
-	logrus.Infof("add nodes...")
+	logrus.Infof("call AddNodesHandler...")
+
+	addNodeRequest := entity.AddNodeRequest{}
+
+	//parse RequestBody
+	err := json.NewDecoder(request.Request.Body).Decode(&addNodeRequest)
+	if err != nil {
+		logrus.Errorf("AddNodesHandler, convert body to request failed, error is %v", err)
+		resp := RespStruct{Success: false, Err: DEPLOY_ERROR_PARSE_REQUESTBODY_FAILED}
+		response.WriteEntity(resp)
+		return
+	}
+
+	err = AddNodes(addNodeRequest)
+	if err != nil {
+		logrus.Errorf("AddNodesHandler, add node failed, error is %v", err)
+		resp := RespStruct{Success: false, Err: DEPLOY_ERROR_ADD_NODE_FAILED}
+		response.WriteEntity(resp)
+		return
+	}
 
 	respData := RespData{}
 	resp := RespStruct{Success: true, Data: respData}
 	response.WriteEntity(resp)
+	return
 }
 
 func (r Resource) DeleteClusterHandler(request *restful.Request, response *restful.Response) {
 
-	logrus.Infof("delete a cluster...")
+	logrus.Infof("call DeleteClusterHandler...")
 	username := request.PathParameter("username")
 	clustername := request.PathParameter("clustername")
-	logrus.Infof(username, clustername)
+
+	err := DeleteCluster(username, clustername)
+	if err != nil {
+		logrus.Errorf("DeleteClusterHandler, DeleteCluster failed, error is %v", err)
+		resp := RespStruct{Success: false, Err: DEPLOY_ERROR_DELETE_CLUSTER_FAILED}
+		response.WriteEntity(resp)
+		return
+	}
 
 	respData := RespData{}
 	resp := RespStruct{Success: true, Data: respData}
 	response.WriteEntity(resp)
+	return
 }
 
 func (r Resource) DeleteNodeHandler(request *restful.Request, response *restful.Response) {
 
-	logrus.Infof("delete a node...")
+	logrus.Infof("call DeleteNodeHandler...")
 	username := request.PathParameter("username")
 	clustername := request.PathParameter("clustername")
 	nodeip := request.PathParameter("nodeip")
-	logrus.Infof(username, clustername, nodeip)
+
+	err := DeleteNode(username, clustername, nodeip)
+	if err != nil {
+		logrus.Errorf("DeleteNodeHandler, DeleteNode failed, error is %v", err)
+		resp := RespStruct{Success: false, Err: DEPLOY_ERROR_DELETE_NODE_FAILED}
+		response.WriteEntity(resp)
+		return
+	}
 
 	respData := RespData{}
 	resp := RespStruct{Success: true, Data: respData}

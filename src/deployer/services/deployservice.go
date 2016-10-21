@@ -33,6 +33,7 @@ func cleanup(clusterDir string) (err error) {
 func cleanNode() (err error) {
 	return
 }
+
 func CreateCluster(request entity.CreateRequest) (err error) {
 
 	logrus.Infof("start createCluster...")
@@ -144,68 +145,64 @@ func AddNodes(request entity.AddNodeRequest) (err error) {
 	//check if dcos-installer.tar exists
 	exist, _ = common.PathExist(clusterDir + "genconf/serve/dcos-install.tar")
 	if !exist {
-		//TODO
-		q := backup(clusterDir)
-		logrus.Infof("%v", q)
+		logrus.Infof("AddNodes, backup file not exists. try backup...")
+		errb := backup(clusterDir)
+		if errb != nil {
+			logrus.Errorf("AddNodes, backup failed, err is %v", err)
+			return
+		}
 	}
 
+	//start to add nodes
+	for _, nodeip := range nodes {
+
+		go addSingleNode(nodeip, request.SshUser, privateKeyPath, clusterDir, request.SlaveType)
+
+	}
+
+	return
+}
+
+//add single node, for loop in AddNodes
+func addSingleNode(nodeip string, sshUser string, privateKeyPath string, clusterDir string, slaveType string) {
+
+	logrus.Infof("addnode %s", nodeip)
 	//scp -i $ssh_key $clusterDir/genconf/serve/dcos-install.tar $(sshuser)@$(nodeip):/tmp/dcos-install.tar
-	commandStr := "scp -i " + privateKeyPath + " " +
-		clusterDir + "genconf/serve/dcos-install.tar " + request.SshUser + "@" + nodes[0] + ":/tmp/dcos-install.tar"
+	commandStr := "scp -oConnectTimeout=10 -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oBatchMode=yes -oPasswordAuthentication=no -i " + privateKeyPath + " " +
+		clusterDir + "genconf/serve/dcos-install.tar " + sshUser + "@" + nodeip + ":/tmp/dcos-install.tar"
 
 	logrus.Infof("execute command: %s", commandStr)
 	_, errput, err := common.ExecCommand(commandStr)
 	if err != nil {
 		logrus.Errorf("AddNodes, ExecCommand err: %v", err)
-		logrus.Infof("AddNodes failed, errput: %s", errput)
+		logrus.Infof("addnode %s failed failed, errput: %s", nodeip, errput)
 		return
 	}
-
-	//command: ssh -i $ssh_key $(sshuser)@$(nodeip) sudo mkdir -p /opt/dcos_install_tmp
-	//	commandStr = "ssh -i " + clusterDir + "genconf/ssh_key " + request.SshUser + "@" + nodes[0] +
-	//		" sudo mkdir -p /opt/dcos_install_tmp"
-
-	//	logrus.Infof("execute command: %s", commandStr)
-	//_, errput, err = common.ExecCommand(commandStr)
 
 	commandStr = "sudo mkdir -p /opt/dcos_install_tmp"
-	_, errput, err = common.SshExecCmdWithKey(nodes[0], "22", request.SshUser, privateKeyPath, commandStr)
+	_, errput, err = common.SshExecCmdWithKey(nodeip, "22", sshUser, privateKeyPath, commandStr)
 	if err != nil {
 		logrus.Errorf("AddNodes, ExecCommand err: %v", err)
-		logrus.Infof("AddNodes failed, errput: %s", errput)
+		logrus.Infof("addnode %s failed failed, errput: %s", nodeip, errput)
 		return
 	}
-
-	//command: ssh -i $ssh_key $(sshuser)@$(nodeip) sudo tar xf dcos-install.tar -C /opt/dcos_install_tmp
-	//	commandStr = "ssh -i " + clusterDir + "genconf/ssh_key " + request.SshUser + "@" + nodes[0] +
-	//		" sudo tar xf /tmp/dcos-install.tar -C /opt/dcos_install_tmp"
-
-	//	logrus.Infof("execute command: %s", commandStr)
-	//	_, errput, err = common.ExecCommand(commandStr)
 
 	commandStr = "sudo tar xf /tmp/dcos-install.tar -C /opt/dcos_install_tmp"
-	_, errput, err = common.SshExecCmdWithKey(nodes[0], "22", request.SshUser, privateKeyPath, commandStr)
+	_, errput, err = common.SshExecCmdWithKey(nodeip, "22", sshUser, privateKeyPath, commandStr)
 	if err != nil {
 		logrus.Errorf("AddNodes, ExecCommand err: %v", err)
-		logrus.Infof("AddNodes failed, errput: %s", errput)
+		logrus.Infof("addnode %s failed failed, errput: %s", nodeip, errput)
 		return
 	}
 
-	//command: ssh -i $ssh_key $(sshuser)@$(nodeip) sudo bash /opt/dcos_install_tmp/dcos_install.sh slave/slave_public
-	//	commandStr = "ssh -i " + clusterDir + "genconf/ssh_key " + request.SshUser + "@" + nodes[0] +
-	//		" sudo bash /opt/dcos_install_tmp/dcos_install.sh " + request.SlaveType + " >> " + clusterDir + "opendcos_addnode.log"
-
-	//	logrus.Infof("execute command: %s", commandStr)
-	//_, errput, err = common.ExecCommand(commandStr)
-
-	commandStr = "sudo bash /opt/dcos_install_tmp/dcos_install.sh " + request.SlaveType + " >> " + clusterDir + "opendcos_addnode.log"
-	_, errput, err = common.SshExecCmdWithKey(nodes[0], "22", request.SshUser, privateKeyPath, commandStr)
+	commandStr = "sudo bash /opt/dcos_install_tmp/dcos_install.sh " + slaveType + " >> " + clusterDir + "opendcos_addnode.log"
+	_, errput, err = common.SshExecCmdWithKey(nodeip, "22", sshUser, privateKeyPath, commandStr)
 	if err != nil {
 		logrus.Errorf("AddNodes, ExecCommand err: %v", err)
-		logrus.Infof("AddNodes failed, errput: %s", errput)
+		logrus.Infof("addnode %s failed failed, errput: %s", nodeip, errput)
 		return
 	}
-
+	logrus.Infof("addnode %s succeeded", nodeip)
 	return
 }
 
@@ -359,20 +356,18 @@ func postAction(clusterName string, clusterDir string) (err error) {
 	return
 }
 
-//TODO
 //backup dcos-install.tar
 func backup(clusterDir string) (err error) {
 
 	logrus.Infof("start backup...  clusterDir: %s", clusterDir)
 
 	//command: sudo tar cf $clusterDir/genconf/serve/dcos-install.tar -C $clusterDir/genconf/serve .
-	commandStr := "tar cf " + clusterDir + "genconf/serve/dcos-install.tar -C " + clusterDir + "genconf/serve ."
+	commandStr := "sudo tar cf " + clusterDir + "genconf/serve/dcos-install.tar -C " + clusterDir + "genconf/serve ."
 	logrus.Infof("backup, execute command: %s", commandStr)
 	_, errput, err := common.ExecCommand(commandStr)
 	if err != nil {
 		logrus.Errorf("backup tar cf failed, ExecCommand err: %v", err)
 		logrus.Infof("backup tar cf, errput: %s", errput)
-		//cleanup()
 		return
 	}
 
@@ -381,6 +376,7 @@ func backup(clusterDir string) (err error) {
 	return
 }
 
+//TODO
 //check if username & clusterName validate
 func checkName(username string, clusterName string) (validate bool) {
 
@@ -483,6 +479,7 @@ func genClusterDir(username string, clusterName string) (clusterDir string) {
 	return
 }
 
+//download dcos_generate_config.sh
 func DownloadInstaller() (err error) {
 
 	logrus.Infof("DownloadInstaller, downloading dcos_generate_config.sh. this may take some time...")

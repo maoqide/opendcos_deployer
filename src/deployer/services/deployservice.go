@@ -97,6 +97,7 @@ func DeleteCluster(username string, clusterName string) (err error) {
 
 	//generate clusterDir
 	clusterDir := genClusterDir(username, clusterName)
+	privateKeyPath := clusterDir + "genconf/ssh_key"
 
 	//check if cluster exists
 	exist, _ := common.PathExist(clusterDir)
@@ -115,6 +116,14 @@ func DeleteCluster(username string, clusterName string) (err error) {
 		return
 	}
 	logrus.Infof("DeleteCluster %s, output: %s", clusterName, output)
+
+	//TODO
+	//find slaves from cluster dir
+	nodes := []string{}
+	sshUser := "root"
+	for _, nodeip := range nodes {
+		go deleteSingleNode(nodeip, sshUser, privateKeyPath)
+	}
 
 	cleanup(clusterDir)
 
@@ -163,85 +172,20 @@ func AddNodes(request entity.AddNodeRequest) (err error) {
 	return
 }
 
-//add single node, for loop in AddNodes
-func addSingleNode(nodeip string, sshUser string, privateKeyPath string, clusterDir string, slaveType string) {
-
-	logrus.Infof("addnode %s", nodeip)
-	//scp -i $ssh_key $clusterDir/genconf/serve/dcos-install.tar $(sshuser)@$(nodeip):/tmp/dcos-install.tar
-	commandStr := "scp -oConnectTimeout=10 -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oBatchMode=yes -oPasswordAuthentication=no -i " + privateKeyPath + " " +
-		clusterDir + "genconf/serve/dcos-install.tar " + sshUser + "@" + nodeip + ":/tmp/dcos-install.tar"
-
-	logrus.Infof("execute command: %s", commandStr)
-	_, errput, err := common.ExecCommand(commandStr)
-	if err != nil {
-		logrus.Errorf("AddNodes, ExecCommand err: %v", err)
-		logrus.Infof("addnode %s failed failed, errput: %s", nodeip, errput)
-		return
-	}
-
-	commandStr = "sudo mkdir -p /opt/dcos_install_tmp"
-	_, errput, err = common.SshExecCmdWithKey(nodeip, "22", sshUser, privateKeyPath, commandStr)
-	if err != nil {
-		logrus.Errorf("AddNodes, ExecCommand err: %v", err)
-		logrus.Infof("addnode %s failed failed, errput: %s", nodeip, errput)
-		return
-	}
-
-	commandStr = "sudo tar xf /tmp/dcos-install.tar -C /opt/dcos_install_tmp"
-	_, errput, err = common.SshExecCmdWithKey(nodeip, "22", sshUser, privateKeyPath, commandStr)
-	if err != nil {
-		logrus.Errorf("AddNodes, ExecCommand err: %v", err)
-		logrus.Infof("addnode %s failed failed, errput: %s", nodeip, errput)
-		return
-	}
-
-	commandStr = "sudo bash /opt/dcos_install_tmp/dcos_install.sh " + slaveType + " >> " + clusterDir + "opendcos_addnode.log"
-	_, errput, err = common.SshExecCmdWithKey(nodeip, "22", sshUser, privateKeyPath, commandStr)
-	if err != nil {
-		logrus.Errorf("AddNodes, ExecCommand err: %v", err)
-		logrus.Infof("addnode %s failed failed, errput: %s", nodeip, errput)
-		return
-	}
-	logrus.Infof("addnode %s succeeded", nodeip)
-	return
-}
-
 func DeleteNode(username string, clusterName string, ip string) (err error) {
 
 	logrus.Infof("start DeleteNode...")
+	sshUser := "root"
 
 	//TODO
 	//check
 
 	//generate clusterDir
 	clusterDir := genClusterDir(username, clusterName)
+	privateKeyPath := clusterDir + "genconf/ssh_key"
 
-	//command: ssh -i $ssh_key $(sshuser)@$(nodeip) sudo -i /opt/mesosphere/bin/pkgpanda uninstall
-	commandStr := "ssh -i " + clusterDir + "genconf/ssh_key " + "root" + "@" + ip +
-		" sudo -i /opt/mesosphere/bin/pkgpanda uninstall"
+	go deleteSingleNode(ip, sshUser, privateKeyPath)
 
-	logrus.Infof("execute command: %s", commandStr)
-	output, errput, err := common.ExecCommand(commandStr)
-
-	if err != nil {
-		logrus.Errorf("DeleteNode, ExecCommand err: %v", err)
-		logrus.Infof("DeleteNode failed, errput: %s", errput)
-		return
-	}
-	logrus.Infof("command output: %s", output)
-
-	//command: ssh -oConnectTimeout=10 -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oBatchMode=yes -oPasswordAuthentication=no -p22 -i $ssh_key $(sshuser)@$(nodeip) sudo rm -rf /opt/mesosphere /etc/mesosphere
-	commandStr = "ssh -i " + clusterDir + "genconf/ssh_key " + "root" + "@" + ip +
-		" sudo rm -rf /opt/mesosphere /etc/mesosphere"
-
-	logrus.Infof("execute command: %s", commandStr)
-	output, errput, err = common.ExecCommand(commandStr)
-	if err != nil {
-		logrus.Errorf("DeleteNode, ExecCommand err: %v", err)
-		logrus.Infof("DeleteNode failed, errput: %s", errput)
-		return
-	}
-	logrus.Infof("command output: %s", output)
 	return
 }
 
@@ -374,6 +318,73 @@ func backup(clusterDir string) (err error) {
 	logrus.Infof("backup finished. clusterDir: %s", clusterDir)
 
 	return
+}
+
+//add single node, for loop in AddNodes
+func addSingleNode(nodeip string, sshUser string, privateKeyPath string, clusterDir string, slaveType string) {
+
+	logrus.Infof("add node %s ...", nodeip)
+
+	//scp -i $ssh_key $clusterDir/genconf/serve/dcos-install.tar $(sshuser)@$(nodeip):/tmp/dcos-install.tar
+	commandStr := "scp -oConnectTimeout=10 -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oBatchMode=yes -oPasswordAuthentication=no -i " + privateKeyPath + " " +
+		clusterDir + "genconf/serve/dcos-install.tar " + sshUser + "@" + nodeip + ":/tmp/dcos-install.tar"
+
+	logrus.Infof("execute command: %s", commandStr)
+	_, errput, err := common.ExecCommand(commandStr)
+	if err != nil {
+		logrus.Errorf("AddNodes, ExecCommand err: %v", err)
+		logrus.Infof("add node %s failed failed, errput: %s", nodeip, errput)
+		return
+	}
+
+	commandStr = "sudo mkdir -p /opt/dcos_install_tmp"
+	_, errput, err = common.SshExecCmdWithKey(nodeip, "22", sshUser, privateKeyPath, commandStr)
+	if err != nil {
+		logrus.Errorf("AddNodes, ExecCommand err: %v", err)
+		logrus.Infof("add node %s failed failed, errput: %s", nodeip, errput)
+		return
+	}
+
+	commandStr = "sudo tar xf /tmp/dcos-install.tar -C /opt/dcos_install_tmp"
+	_, errput, err = common.SshExecCmdWithKey(nodeip, "22", sshUser, privateKeyPath, commandStr)
+	if err != nil {
+		logrus.Errorf("AddNodes, ExecCommand err: %v", err)
+		logrus.Infof("add node %s failed failed, errput: %s", nodeip, errput)
+		return
+	}
+
+	commandStr = "sudo bash /opt/dcos_install_tmp/dcos_install.sh " + slaveType + " >> " + clusterDir + "opendcos_addnode.log"
+	_, errput, err = common.SshExecCmdWithKey(nodeip, "22", sshUser, privateKeyPath, commandStr)
+	if err != nil {
+		logrus.Errorf("AddNodes, ExecCommand err: %v", err)
+		logrus.Infof("add node %s failed failed, errput: %s", nodeip, errput)
+		return
+	}
+	logrus.Infof("add node %s succeeded", nodeip)
+	return
+}
+
+//delete single node
+func deleteSingleNode(nodeip string, sshUser string, privateKeyPath string) {
+
+	logrus.Infof("delete node %s ...", nodeip)
+
+	commandStr := "sudo -i /opt/mesosphere/bin/pkgpanda uninstall"
+	output, errput, err := common.SshExecCmdWithKey(nodeip, "22", sshUser, privateKeyPath, commandStr)
+	if err != nil {
+		logrus.Errorf("DeleteNode, ExecCommand err: %v", err)
+		logrus.Infof("DeleteNode failed, errput: %s", errput)
+		return
+	}
+	logrus.Infof("command output: %s", output)
+
+	commandStr = "sudo rm -rf /opt/mesosphere /etc/mesosphere"
+	_, errput, err = common.SshExecCmdWithKey(nodeip, "22", sshUser, privateKeyPath, commandStr)
+	if err != nil {
+		logrus.Errorf("DeleteNode, ExecCommand err: %v", err)
+		logrus.Infof("DeleteNode failed, errput: %s", errput)
+		return
+	}
 }
 
 //TODO

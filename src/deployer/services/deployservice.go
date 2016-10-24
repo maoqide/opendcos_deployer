@@ -88,6 +88,17 @@ func CreateCluster(request entity.CreateRequest) (err error) {
 		return
 	}
 
+	//remove tar package
+	commandStr := "sudo rm -f " + clusterDir + "*.tar"
+	logrus.Infof("CreateCluster, execute command: %s", commandStr)
+	output, errput, err := common.ExecCommand(commandStr)
+	if err != nil {
+		logrus.Errorf("CreateCluster, ExecCommand err: %v", err)
+		logrus.Infof("CreateCluster %s, errput: %s", clusterName, errput)
+		return
+	}
+	logrus.Infof("CreateCluster %s, output: %s", clusterName, output)
+
 	return
 }
 

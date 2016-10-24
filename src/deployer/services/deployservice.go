@@ -16,20 +16,6 @@ var (
 	DEPLOY_ERROR_INVALIDATE_CLUSTERNAME string = "INVALIDATE_CLUSTERNAME"
 )
 
-//remove the cluster directory
-func cleanup(clusterDir string) (err error) {
-
-	logrus.Infof("start cleanup... clusterDir: %s", clusterDir)
-
-	_, errput, err := common.ExecCommand("sudo rm -rf " + clusterDir)
-	if err != nil {
-		logrus.Errorf("cleanup error, err is %s, errput: %s", err, errput)
-	}
-
-	logrus.Infof("cleanup clusterDir: %s, finished", clusterDir)
-	return
-}
-
 func CreateCluster(request entity.CreateRequest) (err error) {
 
 	logrus.Infof("start createCluster...")
@@ -350,7 +336,7 @@ func addSingleNode(nodeip string, sshUser string, privateKeyPath string, cluster
 	_, errput, err = common.SshExecCmdWithKey(nodeip, "22", sshUser, privateKeyPath, commandStr)
 	if err != nil {
 		logrus.Errorf("AddNodes, ExecCommand err: %v", err)
-		logrus.Infof("add node %s failed failed, errput: %s", nodeip, errput)
+		logrus.Infof("add node %s failed, errput: %s", nodeip, errput)
 		return
 	}
 
@@ -517,4 +503,23 @@ func DownloadInstaller() (err error) {
 	}
 	return
 
+}
+
+//remove the cluster directory
+func cleanup(clusterDir string) (err error) {
+
+	logrus.Infof("start cleanup... clusterDir: %s", clusterDir)
+
+	_, errput, err := common.ExecCommand("sudo rm -rf " + clusterDir)
+	if err != nil {
+		logrus.Errorf("cleanup error, err is %s, errput: %s", err, errput)
+	}
+
+	logrus.Infof("cleanup clusterDir: %s, finished", clusterDir)
+	return
+}
+
+func nodeExists(clusterDir string, nodeip string) (err error) {
+
+	return
 }

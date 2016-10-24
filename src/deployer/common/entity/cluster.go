@@ -4,7 +4,7 @@ package entity
 type DCOSConfig struct {
 	Agent_list                []string `yaml:"agent_list,omitempty" json:"agent_list"`
 	Bootstrap_url             string   `yaml:"bootstrap_url,omitempty" json:"bootstrap_url"` //default: file:///opt/dcos_install_tmp
-	Cluster_name              string   `yaml:"cluster_name,omitempty" json:"cluster_name"`
+	Cluster_name              string   `yaml:"cluster_name" json:"cluster_name"`
 	Exhibitor_storage_backend string   `yaml:"exhibitor_storage_backend,omitempty" json:"exhibitor_storage_backend"` //static/zookeeper/aws_s3/azure
 	Master_discovery          string   `yaml:"master_discovery,omitempty" json:"master_discovery"`                   //static/master_http_loadbalancer
 	Master_list               []string `yaml:"master_list,omitempty" json:"master_list"`
@@ -14,14 +14,14 @@ type DCOSConfig struct {
 	Resolvers                 []string `yaml:"resolvers,omitempty" json:"resolvers"`
 	Use_proxy                 bool     `yaml:"use_proxy,omitempty" json:"use_proxy"`                     //DEFAULT 'false'
 	Check_time                string   `yaml:"check_time,omitempty" json:"check_time"`                   //Check if NTP is enabled during startu
-	Docker_remove_delay       string   `yaml:"docker_remove_delay,omitempty" json:"docker_remove_delay"` //DEFAULT 1 hour
-	Gc_delay                  string   `yaml:"gc_delay,omitempty" json:"gc_delay"`                       //DEFAULT 2 days
+	Docker_remove_delay       int      `yaml:"docker_remove_delay,omitempty" json:"docker_remove_delay"` //DEFAULT 1 hour
+	Gc_delay                  int      `yaml:"gc_delay,omitempty" json:"gc_delay"`                       //DEFAULT 2 days
 	Log_directory             string   `yaml:"log_directory,omitempty" json:"log_directory"`             //DEFAULT /genconf/logs
-	Process_timeout           string   `yaml:"process_timeout,omitempty" json:"process_timeout"`         //DEFAULT 120 seconds
+	Process_timeout           int      `yaml:"process_timeout,omitempty" json:"process_timeout"`         //DEFAULT 120 seconds
 	Oauth_enabled             bool     `yaml:"oauth_enabled,omitempty" json:"oauth_enabled"`             //DEFAULT 'true'
 	Telemetry_enabled         bool     `yaml:"telemetry_enabled,omitempty" json:"telemetry_enabled"`     //Enable anonymous data sharing. DEFAULT 'true'
 	Ssh_key_path              string   `yaml:"ssh_key_path,omitempty" json:"ssh_key_path"`               //DEFAULT /genconf/ssh-key
-	Ssh_port                  string   `yaml:"ssh_port,omitempty" json:"ssh_port"`
+	Ssh_port                  int      `yaml:"ssh_port,omitempty" json:"ssh_port"`
 	Ssh_user                  string   `yaml:"ssh_user,omitempty" json:"ssh_user"`
 
 	//when exhibitor_storage_backend: zookeeper, required
@@ -41,11 +41,11 @@ type DCOSConfig struct {
 
 	//when master_discovery: master_http_loadbalancer, required
 	Exhibitor_address string `yaml:"exhibitor_address,omitempty" json:"exhibitor_address"`
-	Num_masters       string `yaml:"num_masters,omitempty" json:"num_masters"`
+	Num_masters       int    `yaml:"num_masters,omitempty" json:"num_masters"`
 
 	//when dcos_overlay_enable: 'true'
-	Dcos_overlay_config_attempts string             `yaml:"dcos_overlay_config_attempts,omitempty" json:"dcos_overlay_config_attempts"` //how many failed configuration attempts are allowed
-	Dcos_overlay_mtu             string             `yaml:"dcos_overlay_mtu,omitempty" json:"dcos_overlay_mtu"`                         //the maximum transmission unit (MTU) of the Virtual Ethernet (vEth) on the containers
+	Dcos_overlay_config_attempts int                `yaml:"dcos_overlay_config_attempts,omitempty" json:"dcos_overlay_config_attempts"` //how many failed configuration attempts are allowed
+	Dcos_overlay_mtu             int                `yaml:"dcos_overlay_mtu,omitempty" json:"dcos_overlay_mtu"`                         //the maximum transmission unit (MTU) of the Virtual Ethernet (vEth) on the containers
 	Dcos_overlay_network         DcosOverlayNetwork `yaml:"dcos_overlay_network,omitempty" json:"dcos_overlay_network"`
 
 	//when use_proxy: 'true'
@@ -63,5 +63,5 @@ type DcosOverlayNetwork struct {
 type Overlay struct {
 	Name   string `yaml:"name,omitempty" json:"name"`
 	Subnet string `yaml:"subnet,omitempty" json:"subnet"` //example: 9.0.0.0/8
-	Prefix string `yaml:"prefix,omitempty" json:"prefix"` //the size of the subnet. example:26
+	Prefix int    `yaml:"prefix,omitempty" json:"prefix"` //the size of the subnet. example:26
 }

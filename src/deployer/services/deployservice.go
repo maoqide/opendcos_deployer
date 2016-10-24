@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 
 	"github.com/Sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 )
 
 var (
@@ -29,19 +30,14 @@ func cleanup(clusterDir string) (err error) {
 	return
 }
 
-//TODO
-func cleanNode() (err error) {
-	return
-}
-
 func CreateCluster(request entity.CreateRequest) (err error) {
 
 	logrus.Infof("start createCluster...")
 	logrus.Infof("createRequset: %v", request)
 
-	clusterName := request.ClusterName
+	config := request.Config
+	clusterName := config.Cluster_name
 	username := request.UserName
-	nodesInfo := request.AddNodes
 
 	//check if username&clusterName validate
 	if !checkName(username, clusterName) {
@@ -54,7 +50,7 @@ func CreateCluster(request entity.CreateRequest) (err error) {
 	clusterDir := genClusterDir(username, clusterName)
 
 	//preparation
-	err = preparation(clusterName, clusterDir, request.Timeout, request.SshUser, nodesInfo.SalveNodes, nodesInfo.MasterNodes, nodesInfo.PrivateKey, nodesInfo.PrivateNicName)
+	err = preparation(clusterDir, config, request.PrivateKey, request.PrivateNicName)
 	if err != nil {
 		logrus.Errorf("createCluster, preparation failed. err is %v", err)
 		return
@@ -189,7 +185,7 @@ func DeleteNode(username string, clusterName string, ip string) (err error) {
 	sshUser := "root"
 
 	//TODO
-	//check
+	//check if node exists
 
 	//generate clusterDir
 	clusterDir := genClusterDir(username, clusterName)
@@ -201,10 +197,12 @@ func DeleteNode(username string, clusterName string, ip string) (err error) {
 }
 
 //prepare for deploy, create cluster directory, and execute --genconf
-func preparation(clusterName string, clusterDir string, timeout string, sshUser string, slaves []string, masters []string, privateKey string, privateNicName string) (err error) {
+func preparation(clusterDir string, config entity.DCOSConfig, privateKey string, privateNicName string) (err error) {
 
-	logrus.Infof("start preparation... clusterName: %s, clusterDir: %s, timeout: %s, sshUser: %s, slaves: %v, masters: %v, privateKey: %s, privateNicName: %s",
-		clusterName, clusterDir, timeout, sshUser, slaves, masters, privateKey, privateNicName)
+	clusterName := config.Cluster_name
+
+	logrus.Infof("start preparation... clusterDir: %s, config:%v, privateKey: %s, privateNicName: %s",
+		clusterDir, config, privateKey, privateNicName)
 
 	_, _, err = common.ExecCommand("sudo mkdir -p " + clusterDir)
 	if err != nil {
@@ -217,7 +215,7 @@ func preparation(clusterName string, clusterDir string, timeout string, sshUser 
 		return
 	}
 
-	genConf(clusterDir+"genconf/", clusterName, timeout, sshUser, slaves, masters)
+	genConf(clusterDir+"genconf/", config)
 	genIPDetect(clusterDir+"genconf/", privateNicName)
 	genSshKey(clusterDir+"genconf/", privateKey)
 
@@ -398,54 +396,40 @@ func deleteSingleNode(nodeip string, sshUser string, privateKeyPath string) {
 	}
 }
 
-//TODO
 //check if username & clusterName validate
 func checkName(username string, clusterName string) (validate bool) {
 
 	//check if existed
-
-	validate = true
+	clusterDir := genClusterDir(username, clusterName)
+	exist, _ := common.PathExist(clusterDir)
+	if !exist {
+		validate = true
+		return
+	}
+	validate = false
 	return
 }
 
 //generate config.yaml
 //path should be absolute and end with "/"
-func genConf(path string, clusterName string, timeout string, sshUser string, slaves []string, masters []string) (err error) {
+func genConf(path string, config entity.DCOSConfig) (err error) {
 
-	logrus.Infof("start create file config.yaml... path: %s, clusterName: %s, timeout: %s, sshUser: %s, slaves: %v, masters: %v",
-		path, clusterName, timeout, sshUser, slaves, masters)
+	logrus.Infof("start create file config.yaml... path: %s, config: %v", path, config)
 
-	var strSlaves = ""
-	var strMasters = ""
-	for _, sip := range slaves {
-		strSlaves = strSlaves + `- ` + sip + "\n"
+	logrus.Infof("genConf, slaves:\n%v", config.Agent_list)
+	logrus.Infof("genConf, masters:\n%v", config.Master_list)
+
+	fileBytes, err := yaml.Marshal(&config)
+	if err != nil {
+		logrus.Error("genConf, generate config.yaml failed. error is %v", err)
+		return
 	}
-	for _, mip := range masters {
-		strMasters = strMasters + `- ` + mip + "\n"
-	}
-	logrus.Infof("genConf, slaveStr:\n%s", strSlaves)
-	logrus.Infof("genConf, masterStr:\n%s", strMasters)
+	logrus.Debugf("genConf, config.yaml:\n", string(fileBytes))
 
-	fileStr := `---
-agent_list:
-` + strSlaves + `bootstrap_url: file:///opt/dcos_install_tmp
-cluster_name: ` + clusterName + `
-exhibitor_storage_backend: static
-ip_detect_filename: /genconf/ip-detect
-master_discovery: static
-master_list:
-` + strMasters + `process_timeout: ` + timeout + `
-resolvers:
-- 8.8.8.8
-- 114.114.114.114
-ssh_port: 22
-ssh_user: ` + sshUser + `
-`
-
-	logrus.Debugf("genConf, config.yaml:\n", fileStr)
-	err = ioutil.WriteFile(path+"config.yaml", []byte(fileStr), 0644)
+	err = ioutil.WriteFile(path+"config.yaml", fileBytes, 0644)
 	if err != nil {
 		logrus.Errorf("genConf failed, err is %v", err)
+		return
 	}
 	logrus.Infof("file config.yaml created.")
 	return

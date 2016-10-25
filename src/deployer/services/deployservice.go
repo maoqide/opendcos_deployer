@@ -5,6 +5,8 @@ import (
 	"deployer/common/entity"
 	"errors"
 	"io/ioutil"
+	"os"
+	"strings"
 
 	"github.com/Sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -90,7 +92,7 @@ func DeleteCluster(username string, clusterName string) (err error) {
 
 	//generate clusterDir
 	clusterDir := genClusterDir(username, clusterName)
-	privateKeyPath := clusterDir + "genconf/ssh_key"
+	//privateKeyPath := clusterDir + "genconf/ssh_key"
 
 	//check if cluster exists
 	exist, _ := common.PathExist(clusterDir)
@@ -112,11 +114,13 @@ func DeleteCluster(username string, clusterName string) (err error) {
 
 	//TODO
 	//find slaves from cluster dir
-	nodes := []string{}
-	sshUser := "root"
-	for _, nodeip := range nodes {
-		go deleteSingleNode(nodeip, sshUser, privateKeyPath)
-	}
+	//	nodes, _ := getNodeIp(clusterDir)
+	//	if nodes != nil {
+	//		sshUser := "root"
+	//		for _, nodeip := range nodes {
+	//			go deleteSingleNode(nodeip, sshUser, privateKeyPath)
+	//		}
+	//	}
 
 	cleanup(clusterDir)
 
@@ -437,6 +441,7 @@ echo $(ip addr show ` + privateNicName + ` | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[
 	err = ioutil.WriteFile(path+"ip-detect", []byte(fileStr), 0644)
 	if err != nil {
 		logrus.Errorf("genIPDetect failed, err is %v", err)
+		return
 	}
 	logrus.Infof("file ip-detect created.")
 	return
@@ -519,7 +524,88 @@ func cleanup(clusterDir string) (err error) {
 	return
 }
 
-func nodeExists(clusterDir string, nodeip string) (err error) {
+//get ssh_user and ssh_port in config.yaml
+func getSshUserAndPort(clusterDir string) (sshUser string, sshPort string, err error) {
+
+	config := clusterDir + "genconf/" + "config.yaml"
+	configByte, err := ioutil.ReadFile(config)
+	if err != nil {
+		logrus.Errorf("getSshUserAndPort, read file %s failed, err is %v", config, err)
+		return
+	}
+
+	m := make(map[string]string)
+
+	err = yaml.Unmarshal(configByte, &m)
+
+	if err != nil {
+		logrus.Errorf("getSshUserAndPort, parse config.yaml failed, err is %v", err)
+		return
+	}
+
+	sshUser = m["ssh_user"]
+	sshPort = m["ssh_port"]
+
+	return
+}
+
+//get all node ip of cluster
+func getNodeIp(clusterDir string) (nodeIp []string, err error) {
+
+	fileName := clusterDir + "addSlaves"
+	exist, _ := common.PathExist(fileName)
+	if !exist {
+		//logrus.Infof("getNodeIp, file %s not exists", fileName)
+		return nil, nil
+
+	}
+
+	nodeByte, err := ioutil.ReadFile(fileName)
+	if err != nil {
+		logrus.Errorf("getNodeIp, read file %s failed, err is %v", fileName, err)
+		return nil, err
+	}
+	nodeIp = strings.Split(string(nodeByte), ",")
+	return
+}
+
+//check if nodeip exists in cluster
+func nodeExists(clusterDir string, nodeIp string) (exist bool, err error) {
+
+	nodes, err := getNodeIp(clusterDir)
+	if err != nil {
+		logrus.Errorf("GetNodeIp failed, err is %v", err)
+		return false, err
+	}
+	for _, node := range nodes {
+		if strings.EqualFold(node, nodeIp) {
+			exist = true
+			return
+		}
+	}
+	return false, err
+}
+
+//record node ip
+func recordNodeip(clusterDir string, nodeip string) (err error) {
+
+	fileName := clusterDir + "addSlaves"
+	exist, _ := common.PathExist(fileName)
+	if !exist {
+		err = ioutil.WriteFile(fileName, []byte(nodeip), 0644)
+		if err != nil {
+			logrus.Errorf("recordNodeip, create file %s failed, err is %v", fileName, err)
+			return
+		}
+	}
+
+	file, err := os.Open(fileName)
+	if err != nil {
+		logrus.Errorf("recordNodeip, open file %s failed, err is %v", fileName, err)
+		return
+	}
+	defer file.Close()
+	file.WriteString("," + nodeip)
 
 	return
 }

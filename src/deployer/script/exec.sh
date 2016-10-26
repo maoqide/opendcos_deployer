@@ -18,9 +18,11 @@ if [[ "$operation" == 'help'|| \
 	 "$operation" == 'install-prereqs' || \
 	 "$operation" == 'preflight' || \
 	 "$operation" == 'deploy' || \
-	 "$operation" == 'postflight' || \
-	 "$operation" == 'uninstall' ]]; then
+	 "$operation" == 'postflight' ]]; then
     echo "command: bash /opendcos/dcos_generate_config.sh --$operation --verbose"
+	bash /opendcos/dcos_generate_config.sh --$operation --verbose >> opendcos_deployer.log 2>&1
+elif [[ "$operation" == 'uninstall' ]]; then
+	echo "command: bash /opendcos/dcos_generate_config.sh --$operation --verbose"
 	yes | bash /opendcos/dcos_generate_config.sh --$operation --verbose >> opendcos_deployer.log 2>&1
 else
     echo "invalidate operation "$operation

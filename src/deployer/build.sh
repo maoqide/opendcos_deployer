@@ -22,4 +22,10 @@ if [[ $? -ne 0 ]]; then
 	echo "build ERROR"
 	exit 1
 fi
-echo "build finished"
+
+ARCHIVE="opendcos_deploy.zip"
+cd ${GOPATH}/bin
+	rm -f ${ARCHIVE}
+	zip $ARCHIVE opendcos_deploy	
+	zip -r $ARCHIVE ./script
+cd ..

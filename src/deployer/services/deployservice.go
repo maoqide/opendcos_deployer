@@ -16,6 +16,7 @@ var (
 	BASE_PATH = "/opendcos/clusters/"
 
 	DEPLOY_ERROR_INVALIDATE_CLUSTERNAME string = "INVALIDATE_CLUSTERNAME"
+	DEPLOY_ERROR_DELETENODE_NOT_EXISTED string = "DELETENODE_NOT_EXISTED"
 )
 
 func CreateCluster(request entity.CreateRequest) (err error) {
@@ -92,7 +93,7 @@ func DeleteCluster(username string, clusterName string) (err error) {
 
 	//generate clusterDir
 	clusterDir := genClusterDir(username, clusterName)
-	//privateKeyPath := clusterDir + "genconf/ssh_key"
+	privateKeyPath := clusterDir + "genconf/ssh_key"
 
 	//check if cluster exists
 	exist, _ := common.PathExist(clusterDir)
@@ -112,15 +113,14 @@ func DeleteCluster(username string, clusterName string) (err error) {
 	}
 	logrus.Infof("DeleteCluster %s, output: %s", clusterName, output)
 
-	//TODO
-	//find slaves from cluster dir
-	//	nodes, _ := getNodeIp(clusterDir)
-	//	if nodes != nil {
-	//		sshUser := "root"
-	//		for _, nodeip := range nodes {
-	//			go deleteSingleNode(nodeip, sshUser, privateKeyPath)
-	//		}
-	//	}
+	//find added slaves from cluster dir
+	nodes, _ := getNodes(clusterDir)
+	if nodes != nil {
+		sshUser, _, _ := getSshUserAndPort(clusterDir)
+		for _, nodeip := range nodes {
+			go deleteSingleNode(clusterDir, nodeip, sshUser, privateKeyPath)
+		}
+	}
 
 	cleanup(clusterDir)
 
@@ -172,16 +172,21 @@ func AddNodes(request entity.AddNodeRequest) (err error) {
 func DeleteNode(username string, clusterName string, ip string) (err error) {
 
 	logrus.Infof("start DeleteNode...")
-	sshUser := "root"
-
-	//TODO
-	//check if node exists
 
 	//generate clusterDir
 	clusterDir := genClusterDir(username, clusterName)
+
+	//check if node exists
+	exist, _ := nodeExists(clusterDir, ip)
+	if !exist {
+		logrus.Errorf("DeleteNode, node %s not exists", ip)
+		return errors.New(DEPLOY_ERROR_DELETENODE_NOT_EXISTED)
+	}
+
+	sshUser, _, _ := getSshUserAndPort(clusterDir)
 	privateKeyPath := clusterDir + "genconf/ssh_key"
 
-	go deleteSingleNode(ip, sshUser, privateKeyPath)
+	go deleteSingleNode(clusterDir, ip, sshUser, privateKeyPath)
 
 	return
 }
@@ -348,7 +353,15 @@ func addSingleNode(nodeip string, sshUser string, privateKeyPath string, cluster
 	_, errput, err = common.SshExecCmdWithKey(nodeip, "22", sshUser, privateKeyPath, commandStr)
 	if err != nil {
 		logrus.Errorf("AddNodes, ExecCommand err: %v", err)
-		logrus.Infof("add node %s failed failed, errput: %s", nodeip, errput)
+		logrus.Infof("add node %s failed, errput: %s", nodeip, errput)
+		return
+	}
+
+	commandStr = "echo --------add node to cluster: " + clusterDir + ", nodeip: " + nodeip + " >> " + clusterDir + "opendcos_addnode.log"
+	_, errput, err = common.SshExecCmdWithKey(nodeip, "22", sshUser, privateKeyPath, commandStr)
+	if err != nil {
+		logrus.Errorf("AddNodes, ExecCommand err: %v", err)
+		logrus.Infof("add node %s failed, errput: %s", nodeip, errput)
 		return
 	}
 
@@ -356,15 +369,17 @@ func addSingleNode(nodeip string, sshUser string, privateKeyPath string, cluster
 	_, errput, err = common.SshExecCmdWithKey(nodeip, "22", sshUser, privateKeyPath, commandStr)
 	if err != nil {
 		logrus.Errorf("AddNodes, ExecCommand err: %v", err)
-		logrus.Infof("add node %s failed failed, errput: %s", nodeip, errput)
+		logrus.Infof("add node %s failed, errput: %s", nodeip, errput)
 		return
 	}
+	logrus.Infof("Addnodes, record nodeip %s", nodeip)
+	recordNodeip(clusterDir, nodeip)
 	logrus.Infof("add node %s succeeded", nodeip)
 	return
 }
 
 //delete single node
-func deleteSingleNode(nodeip string, sshUser string, privateKeyPath string) {
+func deleteSingleNode(clusterDir string, nodeip string, sshUser string, privateKeyPath string) {
 
 	logrus.Infof("delete node %s ...", nodeip)
 
@@ -384,6 +399,10 @@ func deleteSingleNode(nodeip string, sshUser string, privateKeyPath string) {
 		logrus.Infof("DeleteNode failed, errput: %s", errput)
 		return
 	}
+
+	logrus.Infof("deleteSingleNode, rmnoderecord nodeip %s", nodeip)
+	rmNodeRecord(clusterDir, nodeip)
+	logrus.Infof("delete node %s succeeded", nodeip)
 }
 
 //check if username & clusterName validate
@@ -531,26 +550,32 @@ func getSshUserAndPort(clusterDir string) (sshUser string, sshPort string, err e
 	configByte, err := ioutil.ReadFile(config)
 	if err != nil {
 		logrus.Errorf("getSshUserAndPort, read file %s failed, err is %v", config, err)
-		return
+		return "root", "22", nil
 	}
 
-	m := make(map[string]string)
+	m := make(map[interface{}]interface{})
 
 	err = yaml.Unmarshal(configByte, &m)
 
 	if err != nil {
 		logrus.Errorf("getSshUserAndPort, parse config.yaml failed, err is %v", err)
-		return
+		return "root", "22", nil
 	}
 
-	sshUser = m["ssh_user"]
-	sshPort = m["ssh_port"]
+	sshUser, ok := m["ssh_user"].(string)
+	if !ok {
+		sshUser = "root"
+	}
+	sshPort, _ = m["ssh_port"].(string)
+	if !ok {
+		sshPort = "22"
+	}
 
 	return
 }
 
 //get all node ip of cluster
-func getNodeIp(clusterDir string) (nodeIp []string, err error) {
+func getNodes(clusterDir string) (nodeip []string, err error) {
 
 	fileName := clusterDir + "addSlaves"
 	exist, _ := common.PathExist(fileName)
@@ -565,47 +590,87 @@ func getNodeIp(clusterDir string) (nodeIp []string, err error) {
 		logrus.Errorf("getNodeIp, read file %s failed, err is %v", fileName, err)
 		return nil, err
 	}
-	nodeIp = strings.Split(string(nodeByte), ",")
+	nodeip = strings.Split(strings.TrimSuffix(string(nodeByte), ","), ",")
 	return
 }
 
 //check if nodeip exists in cluster
-func nodeExists(clusterDir string, nodeIp string) (exist bool, err error) {
+func nodeExists(clusterDir string, nodeip string) (exist bool, err error) {
 
-	nodes, err := getNodeIp(clusterDir)
+	fileName := clusterDir + "addSlaves"
+	exist, _ = common.PathExist(fileName)
+	if !exist {
+		return false, nil
+	}
+
+	record, err := ioutil.ReadFile(fileName)
 	if err != nil {
-		logrus.Errorf("GetNodeIp failed, err is %v", err)
+		logrus.Errorf("nodeExists, read file %s failed, err is %v", fileName, err)
 		return false, err
 	}
-	for _, node := range nodes {
-		if strings.EqualFold(node, nodeIp) {
-			exist = true
-			return
-		}
-	}
-	return false, err
+	return strings.Contains(string(record), nodeip), err
 }
 
 //record node ip
 func recordNodeip(clusterDir string, nodeip string) (err error) {
 
 	fileName := clusterDir + "addSlaves"
-	exist, _ := common.PathExist(fileName)
-	if !exist {
-		err = ioutil.WriteFile(fileName, []byte(nodeip), 0644)
-		if err != nil {
-			logrus.Errorf("recordNodeip, create file %s failed, err is %v", fileName, err)
-			return
-		}
-	}
+	//	exist, _ := common.PathExist(fileName)
+	//	if !exist {
+	//		err = ioutil.WriteFile(fileName, []byte(nodeip), 0644)
+	//		if err != nil {
+	//			logrus.Errorf("recordNodeip, create file %s failed, err is %v", fileName, err)
+	//			return
+	//		}
+	//	}
 
-	file, err := os.Open(fileName)
+	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
 		logrus.Errorf("recordNodeip, open file %s failed, err is %v", fileName, err)
 		return
 	}
 	defer file.Close()
-	file.WriteString("," + nodeip)
+	_, err = file.WriteString(nodeip + ",")
+	if err != nil {
+		logrus.Errorf("recordNodeip, WriteString to file %s failed, err is %v", fileName, err)
+		return
+	}
 
 	return
+}
+
+//remove ip record
+func rmNodeRecord(clusterDir string, nodeip string) (err error) {
+
+	exist, _ := nodeExists(clusterDir, nodeip)
+	if !exist {
+		return
+	}
+
+	fileName := clusterDir + "addSlaves"
+	record, err := ioutil.ReadFile(fileName)
+	if err != nil {
+		logrus.Errorf("rmNodeRecord, read file %s failed, err is %v", fileName, err)
+		return
+	}
+
+	recordStr := string(record)
+	if !strings.Contains(recordStr, ",") {
+		recordStr = strings.Replace(recordStr, nodeip, "", 1)
+	} else {
+		if strings.HasPrefix(recordStr, nodeip) {
+			oldstr := nodeip + ","
+			recordStr = strings.Replace(recordStr, oldstr, "", 1)
+		} else {
+			oldstr := "," + nodeip
+			recordStr = strings.Replace(recordStr, oldstr, "", 1)
+		}
+	}
+
+	err = ioutil.WriteFile(fileName, []byte(recordStr), 0644)
+	if err != nil {
+		logrus.Errorf("rmNodeRecord, error when writeFile, err is %v", err)
+	}
+	return
+
 }

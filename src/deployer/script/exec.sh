@@ -21,7 +21,7 @@ if [[ "$operation" == 'help'|| \
 	 "$operation" == 'postflight' || \
 	 "$operation" == 'uninstall' ]]; then
     echo "command: bash /opendcos/dcos_generate_config.sh --$operation --verbose"
-	bash /opendcos/dcos_generate_config.sh --$operation --verbose >> opendcos_deployer.log 2>&1
+	yes | bash /opendcos/dcos_generate_config.sh --$operation --verbose >> opendcos_deployer.log 2>&1
 else
     echo "invalidate operation "$operation
 fi

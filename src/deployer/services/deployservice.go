@@ -102,6 +102,15 @@ func DeleteCluster(username string, clusterName string) (err error) {
 		return
 	}
 
+	//find added slaves from cluster dir
+	nodes, _ := getNodes(clusterDir)
+	if nodes != nil {
+		sshUser, _, _ := getSshUserAndPort(clusterDir)
+		for _, nodeip := range nodes {
+			go deleteSingleNode(clusterDir, nodeip, sshUser, privateKeyPath)
+		}
+	}
+
 	//execute --uninstall
 	commandStr := "sudo bash script/exec.sh " + clusterDir + " uninstall"
 	logrus.Infof("DeleteCluster,execute command: %s", commandStr)
@@ -112,15 +121,6 @@ func DeleteCluster(username string, clusterName string) (err error) {
 		return
 	}
 	logrus.Infof("DeleteCluster %s, output: %s", clusterName, output)
-
-	//find added slaves from cluster dir
-	nodes, _ := getNodes(clusterDir)
-	if nodes != nil {
-		sshUser, _, _ := getSshUserAndPort(clusterDir)
-		for _, nodeip := range nodes {
-			go deleteSingleNode(clusterDir, nodeip, sshUser, privateKeyPath)
-		}
-	}
 
 	cleanup(clusterDir)
 
@@ -238,7 +238,8 @@ func preCheck(clusterName string, clusterDir string, skipInstall bool) (err erro
 
 	//skipInstall is false, execute --install-prereqs
 	if !skipInstall {
-		output, errput, err1 := common.ExecCommand("sudo bash script/exec.sh " + clusterDir + " install-prereqs")
+		logrus.Infof("execute command: sudo bash /opendcos/dcos_generate_config.sh --install-prereqs --verbose")
+		output, errput, err1 := common.ExecCommandinDir(clusterDir, "sudo bash /opendcos/dcos_generate_config.sh --install-prereqs --verbose")
 		if err1 != nil {
 			logrus.Errorf("preCheck --install-prereqs, ExecCommand err: %v", err)
 			logrus.Infof("preCheck --install-prereqs for cluster %s, errput: %s", clusterName, errput)

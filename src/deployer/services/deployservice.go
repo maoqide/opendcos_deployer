@@ -238,7 +238,7 @@ func preCheck(clusterName string, clusterDir string, skipInstall bool) (err erro
 
 	//skipInstall is false, execute --install-prereqs
 	if !skipInstall {
-		logrus.Infof("execute command: sudo bash /opendcos/dcos_generate_config.sh --install-prereqs --verbose")
+		logrus.Infof("execute command: sudo bash /opendcos/dcos_generate_config.sh --install-prereqs --verbose >> " + "opendcos_deployer.log 2>&1")
 		output, errput, err1 := common.ExecCommandinDir(clusterDir, "sudo bash /opendcos/dcos_generate_config.sh --install-prereqs --verbose")
 		if err1 != nil {
 			logrus.Errorf("preCheck --install-prereqs, ExecCommand err: %v", err)

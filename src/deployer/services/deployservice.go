@@ -112,7 +112,7 @@ func DeleteCluster(username string, clusterName string) (err error) {
 	}
 
 	//execute --uninstall
-	logrus.Infof("DeleteCluster, execute command: sudo bash /opendcos/dcos_generate_config.sh --uninstall --verbose")
+	logrus.Infof("DeleteCluster, execute command: yes | sudo bash /opendcos/dcos_generate_config.sh --uninstall --verbose")
 	output, errput, err := common.ExecCommandinDir(clusterDir, "yes | sudo bash /opendcos/dcos_generate_config.sh --uninstall --verbose"+" >> opendcos_deployer.log 2>&1")
 	if err != nil {
 		logrus.Errorf("DeleteCluster, ExecCommand err: %v", err)
@@ -643,16 +643,19 @@ func rmNodeRecord(clusterDir string, nodeip string) (err error) {
 	}
 
 	recordStr := string(record)
+	oldstr := nodeip + ","
 	if !strings.Contains(recordStr, ",") {
-		recordStr = strings.Replace(recordStr, nodeip, "", 1)
+		logrus.Errorf("node %s not recorded in cluster %s", nodeip, clusterDir)
+		return
 	} else {
-		if strings.HasPrefix(recordStr, nodeip) {
-			oldstr := nodeip + ","
-			recordStr = strings.Replace(recordStr, oldstr, "", 1)
-		} else {
-			oldstr := "," + nodeip
-			recordStr = strings.Replace(recordStr, oldstr, "", 1)
-		}
+		//		if strings.HasPrefix(recordStr, nodeip) {
+		//			oldstr := nodeip + ","
+		//			recordStr = strings.Replace(recordStr, oldstr, "", 1)
+		//		} else {
+		//			oldstr := "," + nodeip
+		//			recordStr = strings.Replace(recordStr, oldstr, "", 1)
+		//		}
+		recordStr = strings.Replace(recordStr, oldstr, "", 1)
 	}
 
 	err = ioutil.WriteFile(fileName, []byte(recordStr), 0644)

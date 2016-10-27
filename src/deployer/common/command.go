@@ -82,13 +82,3 @@ func SshExecCmdWithKey(ip string, port string, sshUser string, privateKeyPath st
 
 	return ExecCommand(input)
 }
-
-func TestCmd(input string) {
-
-	logrus.Infof("command: %s", input)
-	op, ep, err := ExecCommand(input)
-
-	logrus.Infof("output: %s", op)
-	logrus.Infof("errput: %s", ep)
-	logrus.Infof("error: %v", err)
-}

@@ -15,7 +15,7 @@ echo "get packages finished"
 
 echo "build..."
 go build -a -o ${GOPATH}/bin/deployer ${HOME}/main.go
-cp -r ${HOME}/script/ ${GOPATH}/bin
+#cp -r ${HOME}/script/ ${GOPATH}/bin
 
 if [[ $? -ne 0 ]]; then
 	#build error
@@ -23,9 +23,9 @@ if [[ $? -ne 0 ]]; then
 	exit 1
 fi
 
-ARCHIVE="opendcos_deploy.zip"
-cd ${GOPATH}/bin
-	rm -f ${ARCHIVE}
-	zip $ARCHIVE opendcos_deploy	
-	zip -r $ARCHIVE ./script
-cd ..
+#ARCHIVE="opendcos_deploy.zip"
+#cd ${GOPATH}/bin
+#	rm -f ${ARCHIVE}
+#	zip $ARCHIVE opendcos_deploy	
+#	zip -r $ARCHIVE ./script
+#cd ..

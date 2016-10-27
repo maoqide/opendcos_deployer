@@ -112,8 +112,8 @@ func DeleteCluster(username string, clusterName string) (err error) {
 	}
 
 	//execute --uninstall
-	logrus.Infof("DeleteCluster, execute command: sudo bash /opendcos/dcos_generate_config.sh --install-prereqs --verbose")
-	output, errput, err1 := common.ExecCommandinDir(clusterDir, "sudo bash /opendcos/dcos_generate_config.sh --install-prereqs --verbose"+" >> opendcos_deployer.log 2>&1")
+	logrus.Infof("DeleteCluster, execute command: sudo bash /opendcos/dcos_generate_config.sh --uninstall --verbose")
+	output, errput, err := common.ExecCommandinDir(clusterDir, "sudo bash /opendcos/dcos_generate_config.sh --uninstall --verbose"+" >> opendcos_deployer.log 2>&1")
 	//commandStr := "sudo bash script/exec.sh " + clusterDir + " uninstall"
 	//logrus.Infof("DeleteCluster,execute command: %s", commandStr)
 	//output, errput, err := common.ExecCommand(commandStr)
@@ -217,9 +217,11 @@ func preparation(clusterDir string, config entity.DCOSConfig, privateKey string,
 	genSshKey(clusterDir+"genconf/", privateKey)
 
 	//execute --genconf
-	commandStr := "sudo bash script/exec.sh " + clusterDir + " genconf"
-	logrus.Infof("preparation, execute command: %s", commandStr)
-	output, errput, err := common.ExecCommand(commandStr)
+	logrus.Infof("Preparation, execute command: sudo bash /opendcos/dcos_generate_config.sh --genconf --verbose")
+	output, errput, err := common.ExecCommandinDir(clusterDir, "sudo bash /opendcos/dcos_generate_config.sh --genconf --verbose"+" >> opendcos_deployer.log 2>&1")
+	//commandStr := "sudo bash script/exec.sh " + clusterDir + " genconf"
+	//logrus.Infof("preparation, execute command: %s", commandStr)
+	//output, errput, err := common.ExecCommand(commandStr)
 	if err != nil {
 		logrus.Errorf("Preparation, ExecCommand err: %v", err)
 		logrus.Infof("Preparation for cluster %s, errput: %s", clusterName, errput)
@@ -240,7 +242,7 @@ func preCheck(clusterName string, clusterDir string, skipInstall bool) (err erro
 
 	//skipInstall is false, execute --install-prereqs
 	if !skipInstall {
-		logrus.Infof("execute command: sudo bash /opendcos/dcos_generate_config.sh --install-prereqs --verbose")
+		logrus.Infof("preCheck, execute command: sudo bash /opendcos/dcos_generate_config.sh --install-prereqs --verbose")
 		output, errput, err1 := common.ExecCommandinDir(clusterDir, "sudo bash /opendcos/dcos_generate_config.sh --install-prereqs --verbose"+" >> opendcos_deployer.log 2>&1")
 		if err1 != nil {
 			logrus.Errorf("preCheck --install-prereqs, ExecCommand err: %v", err)
@@ -252,9 +254,11 @@ func preCheck(clusterName string, clusterDir string, skipInstall bool) (err erro
 	}
 
 	//execute --preflight
-	commandStr := "sudo bash script/exec.sh " + clusterDir + " preflight"
-	logrus.Infof("preCheck, execute command: %s", commandStr)
-	output, errput, err := common.ExecCommand(commandStr)
+	logrus.Infof("preCheck, execute command: sudo bash /opendcos/dcos_generate_config.sh --preflight --verbose")
+	output, errput, err := common.ExecCommandinDir(clusterDir, "sudo bash /opendcos/dcos_generate_config.sh --preflight --verbose"+" >> opendcos_deployer.log 2>&1")
+	//commandStr := "sudo bash script/exec.sh " + clusterDir + " preflight"
+	//logrus.Infof("preCheck, execute command: %s", commandStr)
+	//output, errput, err := common.ExecCommand(commandStr)
 	if err != nil {
 		logrus.Errorf("preCheck --preflight, ExecCommand err: %v", err)
 		logrus.Infof("preCheck --preflight for cluster %s, errput: %s", clusterName, errput)
@@ -273,9 +277,11 @@ func provision(clusterName string, clusterDir string) (err error) {
 	logrus.Infof("start provision... clusterName: %s, clusterDir: %s", clusterName, clusterDir)
 
 	//execute --deploy
-	commandStr := "sudo bash script/exec.sh " + clusterDir + " deploy"
-	logrus.Infof("provision, execute command: %s", commandStr)
-	output, errput, err := common.ExecCommand(commandStr)
+	logrus.Infof("provision, execute command: sudo bash /opendcos/dcos_generate_config.sh --deploy --verbose")
+	output, errput, err := common.ExecCommandinDir(clusterDir, "sudo bash /opendcos/dcos_generate_config.sh --deploy --verbose"+" >> opendcos_deployer.log 2>&1")
+	//commandStr := "sudo bash script/exec.sh " + clusterDir + " deploy"
+	//logrus.Infof("provision, execute command: %s", commandStr)
+	//output, errput, err := common.ExecCommand(commandStr)
 	if err != nil {
 		logrus.Errorf("provision --deploy, ExecCommand err: %v", err)
 		logrus.Infof("provision --deploy for cluster %s, errput: %s", clusterName, errput)
@@ -293,9 +299,11 @@ func postAction(clusterName string, clusterDir string) (err error) {
 	logrus.Infof("start postAction... clusterName: %s, clusterDir: %s", clusterName, clusterDir)
 
 	//execute --postflight
-	commandStr := "sudo bash script/exec.sh " + clusterDir + " postflight"
-	logrus.Infof("postAction, execute command: %s", commandStr)
-	output, errput, err := common.ExecCommand(commandStr)
+	logrus.Infof("postAction, execute command: sudo bash /opendcos/dcos_generate_config.sh --postflight --verbose")
+	output, errput, err := common.ExecCommandinDir(clusterDir, "sudo bash /opendcos/dcos_generate_config.sh --postflight --verbose"+" >> opendcos_deployer.log 2>&1")
+	//commandStr := "sudo bash script/exec.sh " + clusterDir + " postflight"
+	//logrus.Infof("postAction, execute command: %s", commandStr)
+	//output, errput, err := common.ExecCommand(commandStr)
 	if err != nil {
 		logrus.Errorf("postAction --postflight, ExecCommand err: %v", err)
 		logrus.Infof("postAction --postflight for cluster %s, errput: %s", clusterName, errput)

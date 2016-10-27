@@ -16,7 +16,8 @@ var (
 	BASE_PATH = "/opendcos/clusters/"
 
 	DEPLOY_ERROR_INVALIDATE_CLUSTERNAME string = "INVALIDATE_CLUSTERNAME"
-	DEPLOY_ERROR_DELETENODE_NOT_EXISTED string = "DELETENODE_NOT_EXISTED"
+	DEPLOY_ERROR_NODE_NOT_EXISTED       string = "NODE_NOT_EXISTED"
+	DEPLOY_ERROR_CLUSTER_NOT_EXISTED    string = "CLUSTER_NOT_EXISTED"
 )
 
 func CreateCluster(request entity.CreateRequest) (err error) {
@@ -99,7 +100,7 @@ func DeleteCluster(username string, clusterName string) (err error) {
 	exist, _ := common.PathExist(clusterDir)
 	if !exist {
 		logrus.Errorf("DeleteCluster, cluster not existed. clusterDir: %s", clusterDir)
-		return
+		return errors.New(DEPLOY_ERROR_CLUSTER_NOT_EXISTED)
 	}
 
 	//find added slaves from cluster dir
@@ -144,7 +145,7 @@ func AddNodes(request entity.AddNodeRequest) (err error) {
 	exist, _ := common.PathExist(clusterDir)
 	if !exist {
 		logrus.Errorf("AddNodes, cluster not existed. clusterDir: %s", clusterDir)
-		return
+		return errors.New(DEPLOY_ERROR_CLUSTER_NOT_EXISTED)
 	}
 
 	//check if dcos-installer.tar exists
@@ -179,7 +180,7 @@ func DeleteNode(username string, clusterName string, ip string) (err error) {
 	exist, _ := nodeExists(clusterDir, ip)
 	if !exist {
 		logrus.Errorf("DeleteNode, node %s not exists", ip)
-		return errors.New(DEPLOY_ERROR_DELETENODE_NOT_EXISTED)
+		return errors.New(DEPLOY_ERROR_NODE_NOT_EXISTED)
 	}
 
 	sshUser, _, _ := getSshUserAndPort(clusterDir)
@@ -343,12 +344,13 @@ func addSingleNode(nodeip string, sshUser string, privateKeyPath string, cluster
 
 		commandStr = "sudo bash /tmp/install_prereqs.sh"
 		logrus.Infof("execute install-prereqs on node: %s", nodeip)
-		_, errput, err = common.SshExecCmdWithKey(nodeip, "22", sshUser, privateKeyPath, commandStr)
+		output, errput, err := common.SshExecCmdWithKey(nodeip, "22", sshUser, privateKeyPath, commandStr)
 		if err != nil {
 			logrus.Errorf("AddNodes, ExecCommand err: %v", err)
 			logrus.Infof("add node %s failed, errput: %s", nodeip, errput)
 			return
 		}
+		logrus.Infof("install-prereqs on node: %s finished, output: %s", nodeip, output)
 
 	}
 

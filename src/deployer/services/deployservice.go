@@ -112,9 +112,11 @@ func DeleteCluster(username string, clusterName string) (err error) {
 	}
 
 	//execute --uninstall
-	commandStr := "sudo bash script/exec.sh " + clusterDir + " uninstall"
-	logrus.Infof("DeleteCluster,execute command: %s", commandStr)
-	output, errput, err := common.ExecCommand(commandStr)
+	logrus.Infof("DeleteCluster, execute command: sudo bash /opendcos/dcos_generate_config.sh --install-prereqs --verbose")
+	output, errput, err1 := common.ExecCommandinDir(clusterDir, "sudo bash /opendcos/dcos_generate_config.sh --install-prereqs --verbose"+" >> opendcos_deployer.log 2>&1")
+	//commandStr := "sudo bash script/exec.sh " + clusterDir + " uninstall"
+	//logrus.Infof("DeleteCluster,execute command: %s", commandStr)
+	//output, errput, err := common.ExecCommand(commandStr)
 	if err != nil {
 		logrus.Errorf("DeleteCluster, ExecCommand err: %v", err)
 		logrus.Infof("DeleteCluster %s, errput: %s", clusterName, errput)
@@ -238,8 +240,8 @@ func preCheck(clusterName string, clusterDir string, skipInstall bool) (err erro
 
 	//skipInstall is false, execute --install-prereqs
 	if !skipInstall {
-		logrus.Infof("execute command: sudo bash /opendcos/dcos_generate_config.sh --install-prereqs --verbose >> " + "opendcos_deployer.log 2>&1")
-		output, errput, err1 := common.ExecCommandinDir(clusterDir, "sudo bash /opendcos/dcos_generate_config.sh --install-prereqs --verbose")
+		logrus.Infof("execute command: sudo bash /opendcos/dcos_generate_config.sh --install-prereqs --verbose")
+		output, errput, err1 := common.ExecCommandinDir(clusterDir, "sudo bash /opendcos/dcos_generate_config.sh --install-prereqs --verbose"+" >> opendcos_deployer.log 2>&1")
 		if err1 != nil {
 			logrus.Errorf("preCheck --install-prereqs, ExecCommand err: %v", err)
 			logrus.Infof("preCheck --install-prereqs for cluster %s, errput: %s", clusterName, errput)

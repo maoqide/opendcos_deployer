@@ -9,10 +9,15 @@ type CreateRequest struct {
 }
 
 type AddNodeRequest struct {
-	UserName       string   `json:"userName"`
-	ClusterName    string   `json:"clusterName"`
-	SlaveType      string   `json:"slaveType"` //'slave' or 'slave_public'
-	PrivateNicName string   `json:"privateNicName"`
-	SshUser        string   `json:"sshUser"`
-	Nodes          []string `json:"nodes"`
+	UserName       string `json:"userName"`
+	ClusterName    string `json:"clusterName"`
+	PrivateNicName string `json:"privateNicName"`
+	SshUser        string `json:"sshUser"`
+	Nodes          []Node `json:"nodes"`
+}
+
+type Node struct {
+	Ip          string `json:"ip"`
+	SkipInstall bool   `json:"skipInstall"`
+	SlaveType   string `json:"slaveType"` //'slave' or 'slave_public'
 }

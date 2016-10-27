@@ -159,9 +159,9 @@ func AddNodes(request entity.AddNodeRequest) (err error) {
 	}
 
 	//start to add nodes
-	for _, nodeip := range nodes {
+	for _, node := range nodes {
 
-		go addSingleNode(nodeip, request.SshUser, privateKeyPath, clusterDir, request.SlaveType)
+		go addSingleNode(node.Ip, request.SshUser, privateKeyPath, clusterDir, node.SlaveType, node.SkipInstall)
 
 	}
 
@@ -321,9 +321,36 @@ func backup(clusterDir string) (err error) {
 }
 
 //add single node, for loop in AddNodes
-func addSingleNode(nodeip string, sshUser string, privateKeyPath string, clusterDir string, slaveType string) {
+func addSingleNode(nodeip string, sshUser string, privateKeyPath string, clusterDir string, slaveType string, skipInstall bool) {
 
 	logrus.Infof("add node %s ...", nodeip)
+
+	if !skipInstall {
+
+		logrus.Infof("do install-prereqs on node %s", nodeip)
+
+		//scp -i $ssh_key script/install_prereqs.sh $(sshuser)@$(nodeip):/tmp/install_prereqs.sh
+		commandStr := "scp -oConnectTimeout=10 -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oBatchMode=yes -oPasswordAuthentication=no -i " + privateKeyPath + " " +
+			"script/install_prereqs.sh " + sshUser + "@" + nodeip + ":/tmp/install_prereqs.sh"
+
+		logrus.Infof("execute command: %s", commandStr)
+		_, errput, err := common.ExecCommand(commandStr)
+		if err != nil {
+			logrus.Errorf("AddNodes, ExecCommand err: %v", err)
+			logrus.Infof("add node %s failed failed, errput: %s", nodeip, errput)
+			return
+		}
+
+		commandStr = "sudo bash /tmp/install_prereqs.sh"
+		logrus.Infof("execute install-prereqs on node: %s", nodeip)
+		_, errput, err = common.SshExecCmdWithKey(nodeip, "22", sshUser, privateKeyPath, commandStr)
+		if err != nil {
+			logrus.Errorf("AddNodes, ExecCommand err: %v", err)
+			logrus.Infof("add node %s failed, errput: %s", nodeip, errput)
+			return
+		}
+
+	}
 
 	//scp -i $ssh_key $clusterDir/genconf/serve/dcos-install.tar $(sshuser)@$(nodeip):/tmp/dcos-install.tar
 	commandStr := "scp -oConnectTimeout=10 -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oBatchMode=yes -oPasswordAuthentication=no -i " + privateKeyPath + " " +
@@ -648,13 +675,6 @@ func rmNodeRecord(clusterDir string, nodeip string) (err error) {
 		logrus.Errorf("node %s not recorded in cluster %s", nodeip, clusterDir)
 		return
 	} else {
-		//		if strings.HasPrefix(recordStr, nodeip) {
-		//			oldstr := nodeip + ","
-		//			recordStr = strings.Replace(recordStr, oldstr, "", 1)
-		//		} else {
-		//			oldstr := "," + nodeip
-		//			recordStr = strings.Replace(recordStr, oldstr, "", 1)
-		//		}
 		recordStr = strings.Replace(recordStr, oldstr, "", 1)
 	}
 

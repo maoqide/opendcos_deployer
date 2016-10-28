@@ -12,7 +12,7 @@ deploy opendcos with rest-api
     url: ip:port/v1/deploy/cluster
     contentType: json
 *json example*
-```json
+```javascript
 {
     "userName": "mao",
     "skipInstall": true,
@@ -52,7 +52,7 @@ deploy opendcos with rest-api
     url: ip:port/v1/deploy/nodes  
     contentType: json  
 *json example*
-```json
+```javascript
 {
   "userName": "mao",
   "clusterName": "dcos1",

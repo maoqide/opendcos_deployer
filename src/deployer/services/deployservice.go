@@ -342,7 +342,7 @@ func addSingleNode(nodeip string, sshUser string, privateKeyPath string, cluster
 			return
 		}
 
-		commandStr = "sudo bash /tmp/install_prereqs.sh"
+		commandStr = "sudo sh /tmp/install_prereqs.sh"
 		logrus.Infof("execute install-prereqs on node: %s", nodeip)
 		output, errput, err := common.SshExecCmdWithKey(nodeip, "22", sshUser, privateKeyPath, commandStr)
 		if err != nil {

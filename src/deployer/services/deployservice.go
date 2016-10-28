@@ -350,7 +350,7 @@ func addSingleNode(nodeip string, sshUser string, privateKeyPath string, cluster
 			logrus.Infof("add node %s failed, errput: %s", nodeip, errput)
 			return
 		}
-		logrus.Infof("install-prereqs on node: %s finished, output: %s", nodeip, output)
+		logrus.Infof("install-prereqs on node: %s finished.", nodeip, output)
 
 	}
 

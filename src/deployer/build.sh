@@ -14,7 +14,7 @@ go get gopkg.in/yaml.v2
 echo "get packages finished"
 
 echo "build..."
-go build -a -o ${GOPATH}/bin/deployer ${HOME}/main.go
+go build -a -o ${GOPATH}/bin/opendcos_deploy ${HOME}/main.go
 cp -r ${HOME}/script/ ${GOPATH}/bin
 
 if [[ $? -ne 0 ]]; then
